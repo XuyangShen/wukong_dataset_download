@@ -8,7 +8,7 @@ This unofficial script is used for downloading [Noah-Wukong Dataset](https://wuk
 2. Run script: `$ python script.py`
 
 ## Script Usage
- - Adjust `MAX_THREAD` variables in the script, according to enetwork and devices
+ - Adjust `MAX_CPU` variables in the script, according to network and hardware
  - Check `OUT_FOLDER` value is consistent with folder setup [Default is great]
 
 ## Installation
