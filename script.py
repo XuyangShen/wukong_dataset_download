@@ -36,6 +36,7 @@ def csv_extract(csv) -> Tuple[List, List]:
     caption = df['caption'].to_numpy()
     return url, caption
 
+
 def download(url, output, log) -> bool:
     """Download metod with 2 attempts.
 
@@ -45,7 +46,7 @@ def download(url, output, log) -> bool:
 
     output : str
         output path and file name
-    
+
     log : str
         log path        
 
@@ -73,6 +74,7 @@ def download(url, output, log) -> bool:
         f.write('\n')
     return False
 
+
 def download2(url, output) -> bool:
     """Backup download metod.
 
@@ -91,14 +93,15 @@ def download2(url, output) -> bool:
     command = ['wget', '-c', '-O', output, url]
     try:
         p = Popen(command, stdout=PIPE, stderr=PIPE,
-                    universal_newlines=True)
+                  universal_newlines=True)
         out, err = p.communicate()
         rc = p.returncode
         return rc == 0
     except:
         return False
 
-def run(processID:int, csv:str) -> None:
+
+def run(processID: int, csv: str) -> None:
     """Start process
 
     Parameters
@@ -126,7 +129,8 @@ def run(processID:int, csv:str) -> None:
 
     for ind, (url, cap) in tqdm(enumerate(zip(urls, captions))):
         format = 'jpeg' if 'jepg' in url else 'jpg'
-        succ = download(url=url, output=os.path.join(dir, str(ind) + '.' + format), log=log)
+        succ = download(url=url, output=os.path.join(
+            dir, str(ind) + '.' + format), log=log)
         if not succ:
             error.append(url)
             error_caps.append(cap)
@@ -135,18 +139,18 @@ def run(processID:int, csv:str) -> None:
             pth.append(os.path.join('Data', name, str(ind) + '.' + format))
             new_caps.append(cap)
 
-        # sleep 5ms
-        time.sleep(5/1000)
+        # sleep 1ms
+        time.sleep(1/1000)
 
     df = pd.DataFrame({'pth': pth, 'annoation': new_caps})
     df.to_csv(os.path.join(OUT_FOLDER, 'Annotation', name + '.csv'),
-                encoding='utf-8', index=None)
+              encoding='utf-8', index=None)
     # if error in download
     if len(error) > 0:
         df = pd.DataFrame(
             {'ind': error_inds, 'url': error, 'annoation': error_caps})
         df.to_csv(os.path.join(OUT_FOLDER, 'Miss', name + '.csv'),
-                    encoding='utf-8', index=None)
+                  encoding='utf-8', index=None)
 
     print(f'thr-{processID} complete {name}')
 
@@ -166,10 +170,10 @@ def get_all_csv(folder) -> List:
     """
     assert os.path.exists(folder)
     dirs = os.listdir(folder)
-    
+
     def get_file_id(s):
         return int(s.split('_')[-1][:-4])
-    
+
     return sorted([os.path.join(folder, f) for f in dirs], key=get_file_id)
 
 
