@@ -4,7 +4,7 @@ This unofficial script is used for downloading [Noah-Wukong Dataset](https://wuk
 
 
 ## Quick Usage 
-1. Download [Noah-Wukong Dataset](https://wukong-dataset.github.io/wukong-dataset/index.html) meta-data, and replace the wukong_release folder
+1. Download [Noah-Wukong Dataset](https://wukong-dataset.github.io/wukong-dataset/download.html) meta-data, and replace the wukong_release folder
 2. Run script: `$ python script.py`
 
 ## Script Usage
