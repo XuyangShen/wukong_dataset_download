@@ -17,4 +17,5 @@ This unofficial script is used for downloading [Noah-Wukong Dataset](https://wuk
  - Check `pandas` and `tqdm` python packages are installed
 
 ## Support
+Around `1%` of urls were broken!  
 Create a new issue, welcome!
