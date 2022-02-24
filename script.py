@@ -67,7 +67,7 @@ def download(url, output, log) -> bool:
                 return True
             err = e
             attemps -= 1
-            time.sleep(0.5 * (3-attemps))
+            time.sleep(0.05)
 
     with open(log, 'a') as f:
         f.write(str(err) + '. ' + url)
