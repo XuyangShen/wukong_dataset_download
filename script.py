@@ -6,8 +6,6 @@
 """
 import multiprocessing as mp
 import os
-import shutil
-import time
 import urllib.request
 from subprocess import PIPE, Popen
 from typing import List, Tuple
@@ -18,65 +16,11 @@ from tqdm import tqdm
 DATA_FOLDER = 'wukong_release'
 OUT_FOLDER = 'wukong'
 
-MAX_CPU = max(mp.cpu_count(), 10)
+MAX_CPU = max(32, mp.cpu_count()*2)
 
 
-def csv_extract(csv) -> Tuple[List, List]:
-    """Extract information from csv.
-
-    Returns
-    -------
-    Tuple[List, List]
-
-    """
-    assert os.path.exists(csv)
-
-    df = pd.read_csv(csv)
-    url = df['url'].to_numpy()
-    caption = df['caption'].to_numpy()
-    return url, caption
-
-
-def download(url, output, log) -> bool:
-    """Download metod with 2 attempts.
-
-    Parameters
-    ----------
-    url : str
-
-    output : str
-        output path and file name
-
-    log : str
-        log path        
-
-    Returns
-    -------
-    bool
-        true if download succeeds
-    """
-    attemps = 2
-    err = None
-    while attemps > 0:
-        try:
-            urllib.request.urlretrieve(url, output)
-            return True
-        except Exception as e:
-            succ = download2(url, output)
-            if succ:
-                return True
-            err = e
-            attemps -= 1
-            time.sleep(0.05)
-
-    with open(log, 'a') as f:
-        f.write(str(err) + '. ' + url)
-        f.write('\n')
-    return False
-
-
-def download2(url, output) -> bool:
-    """Backup download metod.
+def sub_download(url, output) -> bool:
+    """Backup download metod timout in 30s.
 
     Parameters
     ----------
@@ -90,7 +34,7 @@ def download2(url, output) -> bool:
     bool
         true if download succeeds
     """
-    command = ['wget', '-c', '-O', output, url]
+    command = ['wget', '-c', '--timeout=30', '-O', output, url]
     try:
         p = Popen(command, stdout=PIPE, stderr=PIPE,
                   universal_newlines=True)
@@ -101,58 +45,59 @@ def download2(url, output) -> bool:
         return False
 
 
-def run(processID: int, csv: str) -> None:
-    """Start process
+
+def csv_extract(csv, dir) -> Tuple[int, str, str, str, bool]:
+    """Extract information from csv.
+
+    Returns
+    -------
+    Tuple[str, str, str, bool]
+
+    """
+    assert os.path.exists(csv)
+    
+    df = pd.read_csv(csv)
+    urls = df['url'].to_numpy()
+    captions = df['caption'].to_numpy()
+
+    for ind, (url, caption) in tqdm(enumerate( zip (urls, captions))):
+
+        format = 'jpeg' if 'jepg' in url else 'jpg'
+        output = os.path.join(dir, str(ind) + '.' + format)
+        # enable resume
+        _exists = os.path.exists(output)
+
+        yield ind, url, caption, output, _exists
+
+
+def url2file(args) -> Tuple[bool, str, str]:
+    """url to files with 2 attempts.
 
     Parameters
     ----------
-    processID : int
-        unique process id
-    csv : str
-        csv file
+    args
+        arguments from the output of "csv_extract"    
+
+    Returns
+    -------
+    Tuple[int, str, str]
+        status, output path/url, and caption
     """
-    print(f'thr-{processID} start')
-    # create dic
-    name = csv[:-4].split('/')[-1]
-    dir = os.path.join(OUT_FOLDER, 'Data', name)
-    if os.path.exists(dir):
-        shutil.rmtree(dir)
-    os.mkdir(dir)
 
-    # make log file
-    log = os.path.join(OUT_FOLDER, 'Logs', name + '.log')
-    with open(log, 'w') as _:
-        pass
+    ind, url, caption, output, _exists = args
 
-    urls, captions = csv_extract(csv)
-    pth, new_caps, error, error_caps, error_inds = [], [], [], [], []
+    if _exists:
+        return -1, output, caption
 
-    for ind, (url, cap) in tqdm(enumerate(zip(urls, captions))):
-        format = 'jpeg' if 'jepg' in url else 'jpg'
-        succ = download(url=url, output=os.path.join(
-            dir, str(ind) + '.' + format), log=log)
-        if not succ:
-            error.append(url)
-            error_caps.append(cap)
-            error_inds.append(ind)
-        else:
-            pth.append(os.path.join('Data', name, str(ind) + '.' + format))
-            new_caps.append(cap)
+    try:
+        urllib.request.urlretrieve(url, output)
+        return -1, output, caption
+    except:
+        if sub_download(url, output): 
+            return -1, output, caption
 
-        # sleep 1ms
-        time.sleep(1/1000)
+    return ind, url, caption
 
-    df = pd.DataFrame({'pth': pth, 'annoation': new_caps})
-    df.to_csv(os.path.join(OUT_FOLDER, 'Annotation', name + '.csv'),
-              encoding='utf-8', index=None)
-    # if error in download
-    if len(error) > 0:
-        df = pd.DataFrame(
-            {'ind': error_inds, 'url': error, 'annoation': error_caps})
-        df.to_csv(os.path.join(OUT_FOLDER, 'Miss', name + '.csv'),
-                  encoding='utf-8', index=None)
-
-    print(f'thr-{processID} complete {name}')
 
 
 def get_all_csv(folder) -> List:
@@ -179,11 +124,34 @@ def get_all_csv(folder) -> List:
 
 if __name__ == '__main__':
     process_pool = mp.Pool(MAX_CPU)
-    csv_lst = get_all_csv(DATA_FOLDER)
 
-    for ind, csv in enumerate(csv_lst):
-        process_pool.apply_async(run, args=(ind, csv))
+    for csv in get_all_csv(DATA_FOLDER):
+        # create dic
+        name = csv[:-4].split('/')[-1]
+        dir = os.path.join(OUT_FOLDER, 'Data', name)
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        
+        PATH, CAPTIONS, ERROR_IND, ERROR_URL, ERROR_CAP = [], [], [], [], []
+        
+        print(f'{name} - start')
+        for status, info, cap in process_pool.imap(url2file, csv_extract(csv, dir)):
+            if status == -1:
+                PATH.append(info)
+                CAPTIONS.append(cap)
+            else:
+                ERROR_IND.append(status)
+                ERROR_URL.append(info)
+                ERROR_CAP.append(cap)
+        
+        df = pd.DataFrame({'pth': PATH, 'annoation': CAPTIONS})
+        df.to_csv(os.path.join(OUT_FOLDER, 'Annotation', name + '.csv'),
+                encoding='utf-8', index=None)
+        # if error in download
+        if len(ERROR_IND) > 0:
+            df = pd.DataFrame(
+                {'ind': ERROR_IND, 'url': ERROR_URL, 'annoation': ERROR_CAP})
+            df.to_csv(os.path.join(OUT_FOLDER, 'Miss', name + '.csv'),
+                    encoding='utf-8', index=None)
 
-    process_pool.close()
-    process_pool.join()
     print("Completed")
